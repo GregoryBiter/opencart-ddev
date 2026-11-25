@@ -89,9 +89,14 @@ main() {
 
     # --- .ddev: файлы кита (перезаписываются при обновлении, config.yaml не трогаем) ---
     mkdir -p "$TARGET/.ddev"
+    # config.opencart.yaml хранит выбранную версию PHP — при обновлении кита не трогаем
+    OC_CFG="$TARGET/.ddev/config.opencart.yaml"
+    SAVED_CFG=""
+    if [ -f "$OC_CFG" ]; then SAVED_CFG="$(cat "$OC_CFG")"; fi
     cp -R "$KIT_DIR/.ddev/." "$TARGET/.ddev/"
+    if [ -n "$SAVED_CFG" ]; then printf '%s\n' "$SAVED_CFG" > "$OC_CFG"; fi
     chmod +x "$TARGET"/.ddev/commands/web/oc-* "$TARGET/.ddev/opencart/lib.sh"
-    echo "✓ .ddev/ (команды oc-config, oc-ocmod, oc-cache, ionCube, php.ini)"
+    echo "✓ .ddev/ (Apache + PHP из config.opencart.yaml, команды oc-*, ionCube, php.ini)"
 
     # --- Makefile ---
     if [ ! -f "$TARGET/Makefile" ]; then

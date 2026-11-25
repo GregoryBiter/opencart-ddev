@@ -10,7 +10,9 @@
 - Пересборка OCMOD-модификаций из консоли (`make ocmod`) — без входа в админку.
 - `make cache` чистит кэш **и сразу пересобирает модификации** (многие темы без них падают).
 - **ionCube Loader** ставится автоматически (зашифрованные темы и модули).
-- PHP 7.4 по умолчанию, MariaDB 10.11, Apache, Mailpit для писем, Xdebug по команде.
+- **PHP 7.4 и Apache принудительно** через `.ddev/config.opencart.yaml` — даже если `.ddev/config.yaml`
+  уже был создан раньше (например, `ddev config` по умолчанию даёт nginx + PHP 8.4: на nginx не работают ЧПУ).
+- MariaDB 10.11, Mailpit для писем, Xdebug по команде.
 
 ## Требования
 
@@ -61,8 +63,9 @@ make open
 make setup PHP_VERSION=8.1 DB_TYPE=mysql DB_VERSION=8.0 DB_FILE=backup.sql.gz
 ```
 
-`PHP_VERSION`, `DB_TYPE`, `DB_VERSION`, `PROJECT_NAME` влияют только на первый `make init`, пока нет `.ddev/config.yaml`.
-Сменить PHP позже: `make php PHP_VERSION=8.1`.
+Версия PHP и веб-сервер берутся из `.ddev/config.opencart.yaml` — DDEV подмешивает его поверх `config.yaml`.
+Сменить PHP: `make php PHP_VERSION=8.1` (повторная установка кита выбранную версию не сбрасывает).
+`DB_TYPE`, `DB_VERSION`, `PROJECT_NAME` влияют только на первый `make init`, пока нет `.ddev/config.yaml`.
 
 ## Команды
 
@@ -108,6 +111,7 @@ kit/
     ├── commands/web/oc-cache      # очистка кэша + пересборка
     ├── opencart/lib.sh            # общие функции
     ├── opencart/ocmod-refresh.php # CLI-аналог кнопки «Обновить» в Модификациях
+    ├── config.opencart.yaml       # Apache + версия PHP (перекрывает config.yaml)
     ├── php/opencart.ini           # memory_limit, upload, max_input_vars…
     └── web-build/Dockerfile.ioncube
 ```

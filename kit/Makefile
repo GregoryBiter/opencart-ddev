@@ -3,7 +3,10 @@
 # =============================================================================
 # Имя проекта = имя папки (сайт будет https://<имя>.ddev.site)
 PROJECT_NAME ?= $(notdir $(CURDIR))
-PHP_VERSION  ?= 7.4
+# Версия PHP хранится в .ddev/config.opencart.yaml (перекрывает config.yaml)
+OC_CFG       := .ddev/config.opencart.yaml
+CURRENT_PHP  := $(shell sed -n 's/^php_version:[[:space:]]*"\{0,1\}\([0-9.]*\)"\{0,1\}.*/\1/p' $(OC_CFG) 2>/dev/null)
+PHP_VERSION  ?= $(or $(CURRENT_PHP),7.4)
 DB_TYPE      ?= mariadb
 DB_VERSION   ?= 10.11
 # Файл дампа: если не задан — ищется единственный *.sql / *.sql.gz / *.zip в корне
@@ -11,7 +14,7 @@ DB_FILE      ?=
 EXPORT_FILE  ?= dump-$(shell date +%Y%m%d-%H%M).sql.gz
 
 .DEFAULT_GOAL := help
-.PHONY: help setup init start stop restart poweroff destroy status open admin ssh logs mail \
+.PHONY: help setup init _set-php start stop restart poweroff destroy status open admin ssh logs mail \
         xdebug-on xdebug-off php db-import db-export db-cli config ocmod cache cache-all permissions
 
 help: ## Список команд
@@ -28,14 +31,24 @@ setup: init db-import config ocmod ## Всё сразу: DDEV + импорт д�
 	@echo "✓ Сайт готов: https://$(PROJECT_NAME).ddev.site  (make open / make admin)"
 
 init: ## Создать .ddev/config.yaml (если его нет) и запустить контейнеры
+	@$(MAKE) --no-print-directory _set-php
 	@if [ -f .ddev/config.yaml ]; then \
-		echo "DDEV уже настроен (.ddev/config.yaml) — просто запускаю."; \
+		echo "DDEV уже настроен (.ddev/config.yaml). Apache и PHP $(PHP_VERSION) — из $(OC_CFG)."; \
 	else \
 		ddev config --project-name=$(PROJECT_NAME) --project-type=php --docroot=. \
 			--webserver-type=apache-fpm --php-version=$(PHP_VERSION) \
 			--database=$(DB_TYPE):$(DB_VERSION) --upload-dirs=image; \
 	fi
-	ddev start
+	@if ddev describe -j 2>/dev/null | grep -q '"status": *"running"'; then ddev restart; else ddev start; fi
+
+# Записать PHP_VERSION в .ddev/config.opencart.yaml
+_set-php:
+	@[ -f $(OC_CFG) ] || { echo "Нет $(OC_CFG) — переустановите кит (install.sh)."; exit 1; }
+	@if grep -q '^php_version:' $(OC_CFG); then \
+		sed -i 's/^php_version:.*/php_version: "$(PHP_VERSION)"/' $(OC_CFG); \
+	else \
+		printf '\nphp_version: "%s"\n' "$(PHP_VERSION)" >> $(OC_CFG); \
+	fi
 
 # --- Жизненный цикл -----------------------------------------------------------
 
@@ -82,8 +95,9 @@ xdebug-off: ## Выключить Xdebug
 	ddev xdebug off
 
 php: ## Сменить версию PHP: make php PHP_VERSION=8.1
-	ddev config --php-version=$(PHP_VERSION)
+	@$(MAKE) --no-print-directory _set-php PHP_VERSION=$(PHP_VERSION)
 	ddev restart
+	@ddev exec php -v </dev/null | head -1
 
 # --- База данных --------------------------------------------------------------
 

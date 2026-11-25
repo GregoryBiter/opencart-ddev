@@ -1,0 +1,11 @@
+# opencart-ddev: обязательные для OpenCart настройки.
+# DDEV подмешивает этот файл поверх config.yaml, поэтому они действуют,
+# даже если config.yaml создан раньше вручную (например, `ddev config` с nginx и PHP 8.4 по умолчанию).
+#
+# Apache обязателен: ЧПУ OpenCart работают через .htaccess, nginx его не читает —
+# все SEO-ссылки открывали бы главную страницу.
+webserver_type: apache-fpm
+
+# Версия PHP сайта. Менять командой: make php PHP_VERSION=8.1
+# (install.sh при обновлении кита этот файл не перезаписывает).
+php_version: "7.4"
