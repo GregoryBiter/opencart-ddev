@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+## Description: Очистить кэш OpenCart (system/storage/cache, кэш изображений) и пересобрать модификации
+## Usage: oc-cache [--images]
+## Example: "ddev oc-cache" or "ddev oc-cache --images"
+
+set -euo pipefail
+# shellcheck source=/dev/null
+source /var/www/html/.ddev/opencart/lib.sh
+
+cd /var/www/html
+oc_clean_dir system/storage/cache
+echo "✓ system/storage/cache очищен"
+
+if [ "${1:-}" = "--images" ]; then
+    oc_clean_dir image/cache
+    echo "✓ image/cache очищен"
+fi
+
+# Модификации всегда пересобираем, а не просто удаляем: многие темы без них падают
+# (например, CyberStore: Undefined constant "deviceType").
+ADMIN_DIR="$(oc_admin_dir)" || exit 1
+php /var/www/html/.ddev/opencart/ocmod-refresh.php /var/www/html "$ADMIN_DIR"

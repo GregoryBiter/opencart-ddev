@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+## Description: Пересобрать OCMOD-модификации (как кнопка «Обновить» в админке)
+## Usage: oc-ocmod
+## Example: "ddev oc-ocmod"
+
+set -euo pipefail
+# shellcheck source=/dev/null
+source /var/www/html/.ddev/opencart/lib.sh
+
+ADMIN_DIR="$(oc_admin_dir)" || exit 1
+php /var/www/html/.ddev/opencart/ocmod-refresh.php /var/www/html "$ADMIN_DIR"

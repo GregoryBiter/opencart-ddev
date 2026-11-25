@@ -1,0 +1,22 @@
+# ionCube Loader для зашифрованных модулей OpenCart (темы, Новая почта и т.п.).
+# Ставится для текущей версии PHP проекта (php_version в .ddev/config.yaml).
+# Если для версии PHP loader не выпущен (например 8.0), сборка не падает — выводится предупреждение.
+# Отключить: удалите этот файл и выполните ddev restart.
+ARG DDEV_PHP_VERSION
+ARG TARGETARCH
+RUN set -eu; \
+    case "${TARGETARCH:-amd64}" in arm64) IC_ARCH="aarch64" ;; *) IC_ARCH="x86-64" ;; esac; \
+    curl -fsSL -o /tmp/ioncube.tar.gz "https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_${IC_ARCH}.tar.gz"; \
+    tar -xzf /tmp/ioncube.tar.gz -C /tmp; \
+    SO="/tmp/ioncube/ioncube_loader_lin_${DDEV_PHP_VERSION}.so"; \
+    if [ -f "$SO" ]; then \
+        EXT_DIR="$(php${DDEV_PHP_VERSION} -r 'echo ini_get("extension_dir");')"; \
+        cp "$SO" "${EXT_DIR}/"; \
+        echo "zend_extension=${EXT_DIR}/ioncube_loader_lin_${DDEV_PHP_VERSION}.so" > "/etc/php/${DDEV_PHP_VERSION}/mods-available/ioncube.ini"; \
+        for sapi in cli fpm; do \
+            ln -sf "/etc/php/${DDEV_PHP_VERSION}/mods-available/ioncube.ini" "/etc/php/${DDEV_PHP_VERSION}/${sapi}/conf.d/00-ioncube.ini"; \
+        done; \
+    else \
+        echo "WARNING: ionCube Loader для PHP ${DDEV_PHP_VERSION} не найден — пропускаю"; \
+    fi; \
+    rm -rf /tmp/ioncube /tmp/ioncube.tar.gz

@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+
+## Description: Сгенерировать config.php и admin/config.php под DDEV для уже рабочего сайта OpenCart
+## Usage: oc-config [--prefix=oc_] [--admin=admin] [--url=https://site.ddev.site]
+## Example: "ddev oc-config" or "ddev oc-config --prefix=oc_ --admin=admin_xyz"
+
+set -euo pipefail
+
+# shellcheck source=/dev/null
+source /var/www/html/.ddev/opencart/lib.sh
+
+ROOT="/var/www/html"
+cd "$ROOT"
+
+DB_PREFIX="${OC_DB_PREFIX:-}"
+ADMIN_DIR="${OC_ADMIN_DIR:-}"
+SITE_URL="${OC_URL:-${DDEV_PRIMARY_URL:-}}"
+
+for arg in "$@"; do
+    case "$arg" in
+        --prefix=*) DB_PREFIX="${arg#*=}" ;;
+        --admin=*)  ADMIN_DIR="${arg#*=}" ;;
+        --url=*)    SITE_URL="${arg#*=}" ;;
+        *) echo "Неизвестный аргумент: $arg" >&2; exit 1 ;;
+    esac
+done
+
+ADMIN_DIR="$(oc_admin_dir "$ADMIN_DIR")" || exit 1
+
+if [ ! -d catalog ] || [ ! -d system ]; then
+    echo "Ошибка: в корне проекта нет catalog/ и system/ — это точно OpenCart?" >&2
+    exit 1
+fi
+
+SITE_URL="${SITE_URL%/}/"
+
+# --- Префикс таблиц: X, для которого есть Xsetting, Xproduct и Xsession; берём самый короткий ---
+if [ -z "$DB_PREFIX" ]; then
+    TABLES="$(mysql -N -B -e 'SHOW TABLES' 2>/dev/null || true)"
+    DETECTED=""
+    FOUND=0
+    while IFS= read -r t; do
+        [ -n "$t" ] || continue
+        p="${t%setting}"
+        if grep -qx "${p}product" <<<"$TABLES" && grep -qx "${p}session" <<<"$TABLES"; then
+            FOUND=1
+            if [ -z "$DETECTED" ] || [ ${#p} -lt ${#DETECTED} ]; then DETECTED="$p"; fi
+        fi
+    done < <(grep -E 'setting$' <<<"$TABLES" || true)
+
+    if [ "$FOUND" = 1 ]; then
+        DB_PREFIX="$DETECTED"
+        echo "✓ Префикс таблиц определён по БД: '$DB_PREFIX'"
+    else
+        DB_PREFIX="oc_"
+        echo "⚠ База пуста или не похожа на OpenCart — используется префикс '$DB_PREFIX'."
+        echo "  Импортируйте дамп (make db-import) и запустите make config ещё раз."
+    fi
+fi
+
+MARK="// Сгенерировано opencart-ddev (ddev oc-config)"
+
+backup() {
+    local f="$1"
+    # Бэкапим только «чужой» конфиг, чтобы повторный запуск не затёр исходный .bak
+    if [ -f "$f" ] && ! grep -qF "$MARK" "$f"; then
+        cp -p "$f" "$f.bak"
+        echo "  бэкап: $f.bak"
+    fi
+}
+
+R="$ROOT"
+
+backup config.php
+cat > config.php <<PHP
+<?php
+${MARK}
+
+// HTTP
+define('HTTP_SERVER', '${SITE_URL}');
+
+// HTTPS
+define('HTTPS_SERVER', '${SITE_URL}');
+
+// DIR
+define('DIR_APPLICATION', '${R}/catalog/');
+define('DIR_SYSTEM', '${R}/system/');
+define('DIR_IMAGE', '${R}/image/');
+define('DIR_STORAGE', '${R}/system/storage/');
+define('DIR_LANGUAGE', DIR_APPLICATION . 'language/');
+define('DIR_TEMPLATE', DIR_APPLICATION . 'view/theme/');
+define('DIR_CONFIG', DIR_SYSTEM . 'config/');
+define('DIR_CACHE', DIR_STORAGE . 'cache/');
+define('DIR_DOWNLOAD', DIR_STORAGE . 'download/');
+define('DIR_LOGS', DIR_STORAGE . 'logs/');
+define('DIR_MODIFICATION', DIR_STORAGE . 'modification/');
+define('DIR_SESSION', DIR_STORAGE . 'session/');
+define('DIR_UPLOAD', DIR_STORAGE . 'upload/');
+
+// DB
+define('DB_DRIVER', 'mysqli');
+define('DB_HOSTNAME', 'db');
+define('DB_USERNAME', 'db');
+define('DB_PASSWORD', 'db');
+define('DB_DATABASE', 'db');
+define('DB_PORT', '3306');
+define('DB_PREFIX', '${DB_PREFIX}');
+PHP
+echo "✓ config.php"
+
+backup "$ADMIN_DIR/config.php"
+cat > "$ADMIN_DIR/config.php" <<PHP
+<?php
+${MARK}
+
+// HTTP
+define('HTTP_SERVER', '${SITE_URL}${ADMIN_DIR}/');
+define('HTTP_CATALOG', '${SITE_URL}');
+
+// HTTPS
+define('HTTPS_SERVER', '${SITE_URL}${ADMIN_DIR}/');
+define('HTTPS_CATALOG', '${SITE_URL}');
+
+// DIR
+define('DIR_APPLICATION', '${R}/${ADMIN_DIR}/');
+define('DIR_SYSTEM', '${R}/system/');
+define('DIR_IMAGE', '${R}/image/');
+define('DIR_STORAGE', '${R}/system/storage/');
+define('DIR_CATALOG', '${R}/catalog/');
+define('DIR_LANGUAGE', DIR_APPLICATION . 'language/');
+define('DIR_TEMPLATE', DIR_APPLICATION . 'view/template/');
+define('DIR_CONFIG', DIR_SYSTEM . 'config/');
+define('DIR_CACHE', DIR_STORAGE . 'cache/');
+define('DIR_DOWNLOAD', DIR_STORAGE . 'download/');
+define('DIR_LOGS', DIR_STORAGE . 'logs/');
+define('DIR_MODIFICATION', DIR_STORAGE . 'modification/');
+define('DIR_SESSION', DIR_STORAGE . 'session/');
+define('DIR_UPLOAD', DIR_STORAGE . 'upload/');
+
+// DB
+define('DB_DRIVER', 'mysqli');
+define('DB_HOSTNAME', 'db');
+define('DB_USERNAME', 'db');
+define('DB_PASSWORD', 'db');
+define('DB_DATABASE', 'db');
+define('DB_PORT', '3306');
+define('DB_PREFIX', '${DB_PREFIX}');
+
+// OpenCart API
+define('OPENCART_SERVER', 'https://www.opencart.com/');
+define('OPENCARTFORUM_SERVER', 'https://opencartforum.com/');
+PHP
+echo "✓ $ADMIN_DIR/config.php"
+
+# .htaccess для ЧПУ: если его нет, берём стандартный из дистрибутива
+if [ ! -f .htaccess ] && [ -f .htaccess.txt ]; then
+    cp .htaccess.txt .htaccess
+    echo "✓ .htaccess создан из .htaccess.txt"
+fi
+
+# Папки storage должны существовать
+for d in cache download logs modification session upload; do
+    mkdir -p "system/storage/$d"
+done
+
+echo
+echo "Готово: ${SITE_URL} (админка: ${SITE_URL}${ADMIN_DIR}/), DB_PREFIX='${DB_PREFIX}'"
