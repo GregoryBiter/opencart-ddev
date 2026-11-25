@@ -19,8 +19,25 @@
 
 ## Установка в сайт
 
+Одной командой, без клонирования — из корня сайта:
+
 ```bash
-git clone <url этого репозитория> ~/opencart-ddev
+curl -fsSL https://raw.githubusercontent.com/GregoryBiter/opencart-ddev/main/install.sh | bash
+```
+
+Указать папку сайта или поставить в папку, не похожую на OpenCart:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/GregoryBiter/opencart-ddev/main/install.sh | bash -s -- /path/to/site --force
+```
+
+Конкретная версия (ветка или тег): `... | OC_DDEV_REF=v1.0.0 bash`.
+Свой форк: `... | OC_DDEV_REPO=user/opencart-ddev bash`.
+
+Или из клона:
+
+```bash
+git clone https://github.com/GregoryBiter/opencart-ddev.git ~/opencart-ddev
 ~/opencart-ddev/install.sh /path/to/site
 ```
 
